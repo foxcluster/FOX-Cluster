@@ -1,0 +1,74 @@
+// SPDX-License-Identifier: MIT
+
+pragma solidity ^0.8.0;
+
+import "./IERC20.sol";
+import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+
+contract OTCPlatform {
+    using SafeMath for uint256;
+
+    address public owner = 0x2F23c3De5c6d15f8bf8Aa4d4631DfEe4e9d8A43e; // Your Metamask wallet address on Avalanche C-Chain
+
+    // Events
+    event TokensSwapped(address indexed sender, address indexed receiver, uint256 fromTokenAmount, uint256 toTokenAmount);
+    event CommissionWithdrawn(address indexed recipient, uint256 commissionAmount);
+    event TransactionCancelled(address indexed sender, address indexed receiver, string reason);
+
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Only owner can call this function");
+        _;
+    }
+
+    // Function to manually swap tokens between different pairs
+    function swapTokens(
+        address sender,
+        address receiver,
+        address fromTokenContractAddress,
+        address toTokenContractAddress,
+        uint256 fromTokenAmount,
+        uint256 exchangeRate,
+        uint256 commissionRate // Commission rate in basis points (0.07% represented as 700)
+    ) external {
+        require(fromTokenAmount > 0, "Invalid amount");
+        require(fromTokenContractAddress != address(0) && toTokenContractAddress != address(0), "Invalid token contract address");
+
+        // Check sender and receiver balances
+        uint256 fromTokenBalance = IERC20(fromTokenContractAddress).balanceOf(sender);
+        uint256 toTokenBalance = IERC20(toTokenContractAddress).balanceOf(receiver);
+        require(fromTokenBalance >= fromTokenAmount, "Insufficient balance");
+        require(toTokenBalance > 0, "Receiver has no balance in the toTokenContractAddress");
+
+        // Calculate commission amounts
+        uint256 fromTokenCommission = fromTokenAmount.mul(commissionRate).div(10000);
+        uint256 toTokenCommission = fromTokenCommission.mul(exchangeRate).div(1 ether); // Convert commission to toToken
+
+        // Ensure both sender and receiver have enough balance for the transaction and commission
+        if (fromTokenBalance < fromTokenAmount.add(fromTokenCommission) || toTokenBalance < toTokenCommission) {
+            emit TransactionCancelled(sender, receiver, "Insufficient balance or commission");
+            return;
+        }
+
+        // Transfer commissions to owner
+        require(IERC20(fromTokenContractAddress).transferFrom(sender, owner, fromTokenCommission), "Commission transfer failed");
+        require(IERC20(toTokenContractAddress).transferFrom(receiver, owner, toTokenCommission), "Commission transfer failed");
+
+        // Transfer tokens
+        require(IERC20(fromTokenContractAddress).transferFrom(sender, receiver, fromTokenAmount), "Token transfer failed");
+        require(IERC20(toTokenContractAddress).transferFrom(receiver, sender, fromTokenAmount.mul(exchangeRate).div(1 ether)), "Token transfer failed");
+
+        // Emit event
+        emit TokensSwapped(sender, receiver, fromTokenAmount, fromTokenAmount.mul(exchangeRate).div(1 ether));
+    }
+
+    // Function to withdraw accumulated commissions
+    function withdrawCommission(address payable recipient, address tokenContractAddress) external onlyOwner {
+        uint256 commissionAmount = IERC20(tokenContractAddress).balanceOf(address(this));
+        require(commissionAmount > 0, "No commission available for withdrawal");
+
+        require(IERC20(tokenContractAddress).transfer(recipient, commissionAmount), "Commission withdrawal failed");
+
+        // Emit event
+        emit CommissionWithdrawn(recipient, commissionAmount);
+    }
+}
