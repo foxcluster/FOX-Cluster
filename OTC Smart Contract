@@ -5,7 +5,7 @@ pragma solidity ^0.8.0;
 import "./IERC20.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
-contract OTCPlatform {
+contract FOXCluster {
     using SafeMath for uint256;
 
     address public owner = 0x2F23c3De5c6d15f8bf8Aa4d4631DfEe4e9d8A43e; // Your Metamask wallet address on Avalanche C-Chain
