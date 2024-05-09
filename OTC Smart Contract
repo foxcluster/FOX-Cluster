@@ -2,7 +2,11 @@
 
 pragma solidity ^0.8.0;
 
-import "./IERC20.sol";
+interface IERC20 {
+    function balanceOf(address account) external view returns (uint256);
+    function transfer(address recipient, uint256 amount) external returns (bool);
+}
+
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
 contract FOXCluster {
@@ -50,12 +54,12 @@ contract FOXCluster {
         }
 
         // Transfer commissions to owner
-        require(IERC20(fromTokenContractAddress).transferFrom(sender, owner, fromTokenCommission), "Commission transfer failed");
-        require(IERC20(toTokenContractAddress).transferFrom(receiver, owner, toTokenCommission), "Commission transfer failed");
+        require(IERC20(fromTokenContractAddress).transfer(owner, fromTokenCommission), "Commission transfer failed");
+        require(IERC20(toTokenContractAddress).transfer(owner, toTokenCommission), "Commission transfer failed");
 
         // Transfer tokens
-        require(IERC20(fromTokenContractAddress).transferFrom(sender, receiver, fromTokenAmount), "Token transfer failed");
-        require(IERC20(toTokenContractAddress).transferFrom(receiver, sender, fromTokenAmount.mul(exchangeRate).div(1 ether)), "Token transfer failed");
+        require(IERC20(fromTokenContractAddress).transfer(receiver, fromTokenAmount), "Token transfer failed");
+        require(IERC20(toTokenContractAddress).transfer(sender, fromTokenAmount.mul(exchangeRate).div(1 ether)), "Token transfer failed");
 
         // Emit event
         emit TokensSwapped(sender, receiver, fromTokenAmount, fromTokenAmount.mul(exchangeRate).div(1 ether));
@@ -66,7 +70,8 @@ contract FOXCluster {
         uint256 commissionAmount = IERC20(tokenContractAddress).balanceOf(address(this));
         require(commissionAmount > 0, "No commission available for withdrawal");
 
-        require(IERC20(tokenContractAddress).transfer(recipient, commissionAmount), "Commission withdrawal failed");
+        address payable tokenContractAddressPayable = payable(tokenContractAddress);
+        require(tokenContractAddressPayable.send(commissionAmount), "Commission withdrawal failed");
 
         // Emit event
         emit CommissionWithdrawn(recipient, commissionAmount);
